@@ -16,6 +16,7 @@ impl Default for Demos {
         let demos: Vec<Box<dyn super::Demo>> = vec![
             Box::new(super::dancing_strings::DancingStrings::default()),
             Box::new(super::drag_and_drop::DragAndDropDemo::default()),
+            Box::new(super::zoom_rotate::ZoomRotate::default()),
             Box::new(super::font_book::FontBook::default()),
             Box::new(super::DemoWindow::default()),
             Box::new(super::painting::Painting::default()),
@@ -42,12 +43,12 @@ impl Default for Demos {
                 .to_owned(),
         );
 
-        Self { open, demos }
+        Self { demos, open }
     }
 }
 impl Demos {
     pub fn checkboxes(&mut self, ui: &mut Ui) {
-        let Self { open, demos } = self;
+        let Self { demos, open } = self;
         for demo in demos {
             let mut is_open = open.contains(demo.name());
             ui.checkbox(&mut is_open, demo.name());
@@ -56,7 +57,7 @@ impl Demos {
     }
 
     pub fn show(&mut self, ctx: &CtxRef) {
-        let Self { open, demos } = self;
+        let Self { demos, open } = self;
         for demo in demos {
             let mut is_open = open.contains(demo.name());
             demo.show(ctx, &mut is_open);
