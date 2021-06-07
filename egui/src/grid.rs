@@ -246,6 +246,7 @@ impl GridLayout {
 ///     ui.end_row();
 /// });
 /// ```
+#[must_use = "You should call .show()"]
 pub struct Grid {
     id_source: Id,
     striped: bool,
@@ -253,6 +254,7 @@ pub struct Grid {
     min_row_height: Option<f32>,
     max_cell_size: Vec2,
     spacing: Option<Vec2>,
+    start_row: usize,
 }
 
 impl Grid {
@@ -265,6 +267,7 @@ impl Grid {
             min_row_height: None,
             max_cell_size: Vec2::INFINITY,
             spacing: None,
+            start_row: 0,
         }
     }
 
@@ -303,6 +306,13 @@ impl Grid {
         self.spacing = Some(spacing.into());
         self
     }
+
+    /// Change which row number the grid starts on.
+    /// This can be useful when you have a large `Grid` inside of [`ScrollArea::show_rows`].
+    pub fn start_row(mut self, start_row: usize) -> Self {
+        self.start_row = start_row;
+        self
+    }
 }
 
 impl Grid {
@@ -314,6 +324,7 @@ impl Grid {
             min_row_height,
             max_cell_size,
             spacing,
+            start_row,
         } = self;
         let min_col_width = min_col_width.unwrap_or_else(|| ui.spacing().interact_size.x);
         let min_row_height = min_row_height.unwrap_or_else(|| ui.spacing().interact_size.y);
@@ -330,6 +341,7 @@ impl Grid {
                 spacing,
                 min_cell_size: vec2(min_col_width, min_row_height),
                 max_cell_size,
+                row: start_row,
                 ..GridLayout::new(ui, id)
             };
 
