@@ -109,7 +109,7 @@ fn create_display(
         .with_stencil_buffer(0)
         .with_vsync(true);
 
-    let display = glium::Display::new(window_builder, context_builder, &event_loop).unwrap();
+    let display = glium::Display::new(window_builder, context_builder, event_loop).unwrap();
 
     if let Some(window_settings) = &window_settings {
         window_settings.restore_positions(&display);
@@ -151,9 +151,10 @@ fn integration_info(
 ) -> epi::IntegrationInfo {
     epi::IntegrationInfo {
         web_info: None,
+        prefer_dark_mode: None, // TODO: figure out system default
         cpu_usage: previous_frame_time,
         seconds_since_midnight: seconds_since_midnight(),
-        native_pixels_per_point: Some(native_pixels_per_point(&display)),
+        native_pixels_per_point: Some(native_pixels_per_point(display)),
     }
 }
 
@@ -167,9 +168,8 @@ fn load_icon(icon_data: epi::IconData) -> Option<glutin::window::Icon> {
 pub fn run(mut app: Box<dyn epi::App>, nativve_options: epi::NativeOptions) -> ! {
     let mut storage = create_storage(app.name());
 
-    if let Some(storage) = &mut storage {
-        app.load(storage.as_ref());
-    }
+    #[cfg(feature = "http")]
+    let http = std::sync::Arc::new(crate::http::GliumHttp {});
 
     let window_settings = deserialize_window_settings(&storage);
     let event_loop = glutin::event_loop::EventLoop::with_user_event();
@@ -183,7 +183,20 @@ pub fn run(mut app: Box<dyn epi::App>, nativve_options: epi::NativeOptions) -> !
     let mut egui = EguiGlium::new(&display);
     *egui.ctx().memory() = deserialize_memory(&storage).unwrap_or_default();
 
-    app.setup(&egui.ctx());
+    {
+        let (ctx, painter) = egui.ctx_and_painter_mut();
+        let mut app_output = epi::backend::AppOutput::default();
+        let mut frame = epi::backend::FrameBuilder {
+            info: integration_info(&display, None),
+            tex_allocator: painter,
+            #[cfg(feature = "http")]
+            http: http.clone(),
+            output: &mut app_output,
+            repaint_signal: repaint_signal.clone(),
+        }
+        .build();
+        app.setup(ctx, &mut frame, storage.as_deref());
+    }
 
     let mut previous_frame_time = None;
 
@@ -191,9 +204,6 @@ pub fn run(mut app: Box<dyn epi::App>, nativve_options: epi::NativeOptions) -> !
 
     #[cfg(feature = "persistence")]
     let mut last_auto_save = Instant::now();
-
-    #[cfg(feature = "http")]
-    let http = std::sync::Arc::new(crate::http::GliumHttp {});
 
     if app.warm_up_enabled() {
         let saved_memory = egui.ctx().memory().clone();
@@ -212,7 +222,7 @@ pub fn run(mut app: Box<dyn epi::App>, nativve_options: epi::NativeOptions) -> !
         }
         .build();
 
-        app.update(&ctx, &mut frame);
+        app.update(ctx, &mut frame);
 
         let _ = egui.end_frame(&display);
 
@@ -316,11 +326,15 @@ pub fn run(mut app: Box<dyn epi::App>, nativve_options: epi::NativeOptions) -> !
             glutin::event::Event::RedrawRequested(_) if !cfg!(windows) => redraw(),
 
             glutin::event::Event::WindowEvent { event, .. } => {
+                if egui.is_quit_event(&event) {
+                    *control_flow = glium::glutin::event_loop::ControlFlow::Exit;
+                }
+
                 if let glutin::event::WindowEvent::Focused(new_focused) = event {
                     is_focused = new_focused;
                 }
 
-                egui.on_event(event, control_flow);
+                egui.on_event(&event);
 
                 display.gl_window().window().request_redraw(); // TODO: ask egui if the events warrants a repaint instead
             }

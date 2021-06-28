@@ -9,13 +9,15 @@
 //! fill the whole width of the browser.
 //! This can be changed by overriding [`epi::App::max_size_points`].
 
-#![cfg_attr(not(debug_assertions), deny(warnings))] // Forbid warnings in release builds
-#![deny(
-    rustdoc::broken_intra_doc_links,
-    rustdoc::invalid_codeblock_attributes,
-    rustdoc::missing_crate_level_docs,
-    rustdoc::private_intra_doc_links
-)]
+// Forbid warnings in release builds:
+#![cfg_attr(not(debug_assertions), deny(warnings))]
+// Disabled so we can support rust 1.51:
+// #![deny(
+//     rustdoc::broken_intra_doc_links,
+//     rustdoc::invalid_codeblock_attributes,
+//     rustdoc::missing_crate_level_docs,
+//     rustdoc::private_intra_doc_links
+// )]
 #![forbid(unsafe_code)]
 #![warn(clippy::all, rust_2018_idioms)]
 
@@ -90,6 +92,15 @@ pub fn native_pixels_per_point() -> f32 {
     } else {
         1.0
     }
+}
+
+pub fn prefer_dark_mode() -> Option<bool> {
+    Some(
+        web_sys::window()?
+            .match_media("(prefers-color-scheme: dark)")
+            .ok()??
+            .matches(),
+    )
 }
 
 pub fn canvas_element(canvas_id: &str) -> Option<web_sys::HtmlCanvasElement> {

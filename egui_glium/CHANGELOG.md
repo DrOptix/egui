@@ -5,7 +5,20 @@ All notable changes to the `egui_glium` integration will be noted in this file.
 
 ## Unreleased
 
+### Fixed 🐛
+* [Fix minimize on Windows](https://github.com/emilk/egui/issues/518)
+
+
+## 0.13.1 - 2021-06-24
+
+* Fix `http` feature flag and docs
+
+
+## 0.13.0 - 2021-06-24
+
+* Add `EguiGlium::is_quit_event` to replace `control_flow` arguemnt to `EguiGlium::on_event`.
 * [Fix modifier key for zoom with mouse wheel on Mac](https://github.com/emilk/egui/issues/401)
+* [Fix stuck modifier keys](https://github.com/emilk/egui/pull/479)
 
 ## 0.12.0 - 2021-05-10
 
@@ -35,16 +48,16 @@ All notable changes to the `egui_glium` integration will be noted in this file.
 
 
 ## 0.7.0 - 2021-01-04
-### Changed
+### Changed 🔧
 * `http` `persistence` and `time` are now optional (and opt-in) features.
 
 
 ## 0.6.0 - 2020-12-26
-### Added
+### Added ⭐
 * `egui_glium` will auto-save your app state every 30 seconds.
 * `egui_glium` can now set windows as fixed size (e.g. the user can't resize the window). See `egui::App::is_resizable()`.
 
-### Changed
+### Changed 🔧
 * `egui_glium` will now save you app state to [a better directory](https://docs.rs/directories-next/2.0.0/directories_next/struct.ProjectDirs.html#method.data_dir).
 * `egui_glium::run`: the parameter `app` now has signature `Box<dyn App>` (you need to add `Box::new(app)` to your code).
 * Window title is now passed via the `trait` function `egui::App::name()`.
@@ -55,7 +68,7 @@ All notable changes to the `egui_glium` integration will be noted in this file.
 
 
 ## 0.5.0 - 2020-12-13
-### Changed
+### Changed 🔧
 * FileStorage::from_path now takes `Into<Path>` instead of `String`
 
 

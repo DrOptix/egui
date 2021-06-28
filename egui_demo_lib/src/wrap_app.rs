@@ -40,9 +40,16 @@ impl epi::App for WrapApp {
         "egui demo apps"
     }
 
-    #[cfg(feature = "persistence")]
-    fn load(&mut self, storage: &dyn epi::Storage) {
-        *self = epi::get_value(storage, epi::APP_KEY).unwrap_or_default()
+    fn setup(
+        &mut self,
+        _ctx: &egui::CtxRef,
+        _frame: &mut epi::Frame<'_>,
+        storage: Option<&dyn epi::Storage>,
+    ) {
+        #[cfg(feature = "persistence")]
+        if let Some(storage) = storage {
+            *self = epi::get_value(storage, epi::APP_KEY).unwrap_or_default()
+        }
     }
 
     #[cfg(feature = "persistence")]
@@ -65,7 +72,7 @@ impl epi::App for WrapApp {
 
     fn update(&mut self, ctx: &egui::CtxRef, frame: &mut epi::Frame<'_>) {
         if let Some(web_info) = frame.info().web_info.as_ref() {
-            if let Some(anchor) = web_info.web_location_hash.strip_prefix("#") {
+            if let Some(anchor) = web_info.web_location_hash.strip_prefix('#') {
                 self.selected_anchor = anchor.to_owned();
             }
         }

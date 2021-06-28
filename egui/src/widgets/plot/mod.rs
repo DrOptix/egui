@@ -4,12 +4,13 @@ mod items;
 mod legend;
 mod transform;
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 
 use items::PlotItem;
+pub use items::{Arrows, Line, MarkerShape, PlotImage, Points, Polygon, Text, Value, Values};
 pub use items::{HLine, VLine};
-pub use items::{Line, MarkerShape, Points, Value, Values};
-use legend::LegendEntry;
+use legend::LegendWidget;
+pub use legend::{Corner, Legend};
 use transform::{Bounds, ScreenTransform};
 
 use crate::*;
@@ -23,6 +24,7 @@ use color::Hsva;
 struct PlotMemory {
     bounds: Bounds,
     auto_bounds: bool,
+    hovered_entry: Option<String>,
     hidden_items: HashSet<String>,
 }
 
@@ -41,16 +43,14 @@ struct PlotMemory {
 /// });
 /// let line = Line::new(Values::from_values_iter(sin));
 /// ui.add(
-///     Plot::new("Test Plot").line(line).view_aspect(2.0)
+///     Plot::new("my_plot").line(line).view_aspect(2.0)
 /// );
 /// ```
 pub struct Plot {
-    name: String,
+    id_source: Id,
     next_auto_color_idx: usize,
 
     items: Vec<Box<dyn PlotItem>>,
-    hlines: Vec<HLine>,
-    vlines: Vec<VLine>,
 
     center_x_axis: bool,
     center_y_axis: bool,
@@ -67,19 +67,17 @@ pub struct Plot {
 
     show_x: bool,
     show_y: bool,
-    show_legend: bool,
+    legend_config: Option<Legend>,
 }
 
 impl Plot {
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn new(name: impl ToString) -> Self {
+    /// Give a unique id for each plot within the same `Ui`.
+    pub fn new(id_source: impl std::hash::Hash) -> Self {
         Self {
-            name: name.to_string(),
+            id_source: Id::new(id_source),
             next_auto_color_idx: 0,
 
             items: Default::default(),
-            hlines: Default::default(),
-            vlines: Default::default(),
 
             center_x_axis: false,
             center_y_axis: false,
@@ -96,7 +94,7 @@ impl Plot {
 
             show_x: true,
             show_y: true,
-            show_legend: true,
+            legend_config: None,
         }
     }
 
@@ -109,7 +107,6 @@ impl Plot {
     }
 
     /// Add a data lines.
-    /// You can add multiple lines.
     pub fn line(mut self, mut line: Line) -> Self {
         if line.series.is_empty() {
             return self;
@@ -120,12 +117,34 @@ impl Plot {
             line.stroke.color = self.auto_color();
         }
         self.items.push(Box::new(line));
+        self
+    }
 
+    /// Add a polygon. The polygon has to be convex.
+    pub fn polygon(mut self, mut polygon: Polygon) -> Self {
+        if polygon.series.is_empty() {
+            return self;
+        };
+
+        // Give the stroke an automatic color if no color has been assigned.
+        if polygon.stroke.color == Color32::TRANSPARENT {
+            polygon.stroke.color = self.auto_color();
+        }
+        self.items.push(Box::new(polygon));
+        self
+    }
+
+    /// Add a text.
+    pub fn text(mut self, text: Text) -> Self {
+        if text.text.is_empty() {
+            return self;
+        };
+
+        self.items.push(Box::new(text));
         self
     }
 
     /// Add data points.
-    /// You can add multiple sets of points.
     pub fn points(mut self, mut points: Points) -> Self {
         if points.series.is_empty() {
             return self;
@@ -136,7 +155,26 @@ impl Plot {
             points.color = self.auto_color();
         }
         self.items.push(Box::new(points));
+        self
+    }
 
+    /// Add arrows.
+    pub fn arrows(mut self, mut arrows: Arrows) -> Self {
+        if arrows.origins.is_empty() || arrows.tips.is_empty() {
+            return self;
+        };
+
+        // Give the arrows an automatic color if no color has been assigned.
+        if arrows.color == Color32::TRANSPARENT {
+            arrows.color = self.auto_color();
+        }
+        self.items.push(Box::new(arrows));
+        self
+    }
+
+    /// Add an image.
+    pub fn image(mut self, image: PlotImage) -> Self {
+        self.items.push(Box::new(image));
         self
     }
 
@@ -147,7 +185,7 @@ impl Plot {
         if hline.stroke.color == Color32::TRANSPARENT {
             hline.stroke.color = self.auto_color();
         }
-        self.hlines.push(hline);
+        self.items.push(Box::new(hline));
         self
     }
 
@@ -158,7 +196,7 @@ impl Plot {
         if vline.stroke.color == Color32::TRANSPARENT {
             vline.stroke.color = self.auto_color();
         }
-        self.vlines.push(vline);
+        self.items.push(Box::new(vline));
         self
     }
 
@@ -262,9 +300,16 @@ impl Plot {
         self
     }
 
+    #[deprecated = "Use `Plot::legend` instead"]
     /// Whether to show a legend including all named items. Default: `true`.
     pub fn show_legend(mut self, show: bool) -> Self {
-        self.show_legend = show;
+        self.legend_config = show.then(Legend::default);
+        self
+    }
+
+    /// Show a legend including all named items.
+    pub fn legend(mut self, legend: Legend) -> Self {
+        self.legend_config = Some(legend);
         self
     }
 }
@@ -272,11 +317,9 @@ impl Plot {
 impl Widget for Plot {
     fn ui(self, ui: &mut Ui) -> Response {
         let Self {
-            name,
+            id_source,
             next_auto_color_idx: _,
             mut items,
-            hlines,
-            vlines,
             center_x_axis,
             center_y_axis,
             allow_zoom,
@@ -290,16 +333,17 @@ impl Widget for Plot {
             view_aspect,
             mut show_x,
             mut show_y,
-            show_legend,
+            legend_config,
         } = self;
 
-        let plot_id = ui.make_persistent_id(name);
+        let plot_id = ui.make_persistent_id(id_source);
         let memory = ui
             .memory()
             .id_data
             .get_mut_or_insert_with(plot_id, || PlotMemory {
                 bounds: min_auto_bounds,
                 auto_bounds: !min_auto_bounds.is_valid(),
+                hovered_entry: None,
                 hidden_items: HashSet::new(),
             })
             .clone();
@@ -307,6 +351,7 @@ impl Widget for Plot {
         let PlotMemory {
             mut bounds,
             mut auto_bounds,
+            mut hovered_entry,
             mut hidden_items,
         } = memory;
 
@@ -342,79 +387,37 @@ impl Widget for Plot {
             rect,
             corner_radius: 2.0,
             fill: ui.visuals().extreme_bg_color,
-            stroke: ui.visuals().window_stroke(),
+            stroke: ui.visuals().widgets.noninteractive.bg_stroke,
         });
 
-        // --- Legend ---
-
-        if show_legend {
-            // Collect the legend entries. If multiple items have the same name, they share a
-            // checkbox. If their colors don't match, we pick a neutral color for the checkbox.
-            let mut legend_entries: BTreeMap<String, LegendEntry> = BTreeMap::new();
-            let neutral_color = ui.visuals().noninteractive().fg_stroke.color;
-            items
-                .iter()
-                .filter(|item| !item.name().is_empty())
-                .for_each(|item| {
-                    let checked = !hidden_items.contains(item.name());
-                    let text = item.name();
-                    legend_entries
-                        .entry(item.name().to_string())
-                        .and_modify(|entry| {
-                            if entry.color != item.color() {
-                                entry.color = neutral_color
-                            }
-                        })
-                        .or_insert_with(|| {
-                            LegendEntry::new(text.to_string(), item.color(), checked)
-                        });
-                });
-
-            // Show the legend.
-            let mut legend_ui = ui.child_ui(rect, Layout::top_down(Align::LEFT));
-            legend_entries.values_mut().for_each(|entry| {
-                let response = legend_ui.add(entry);
-                if response.hovered() {
-                    show_x = false;
-                    show_y = false;
-                }
-            });
-
-            // Get the names of the hidden items.
-            hidden_items = legend_entries
-                .values()
-                .filter(|entry| !entry.checked)
-                .map(|entry| entry.text.clone())
-                .collect();
-
-            // Highlight the hovered items.
-            legend_entries
-                .values()
-                .filter(|entry| entry.hovered)
-                .for_each(|entry| {
-                    items.iter_mut().for_each(|item| {
-                        if item.name() == entry.text {
-                            item.highlight();
-                        }
-                    });
-                });
-
-            // Remove deselected items.
-            items.retain(|item| !hidden_items.contains(item.name()));
+        // Legend
+        let legend = legend_config
+            .and_then(|config| LegendWidget::try_new(rect, config, &items, &hidden_items));
+        // Don't show hover cursor when hovering over legend.
+        if hovered_entry.is_some() {
+            show_x = false;
+            show_y = false;
         }
-
-        // ---
+        // Remove the deselected items.
+        items.retain(|item| !hidden_items.contains(item.name()));
+        // Highlight the hovered items.
+        if let Some(hovered_name) = &hovered_entry {
+            items
+                .iter_mut()
+                .filter(|entry| entry.name() == hovered_name)
+                .for_each(|entry| entry.highlight());
+        }
+        // Move highlighted items to front.
+        items.sort_by_key(|item| item.highlighted());
 
         auto_bounds |= response.double_clicked_by(PointerButton::Primary);
 
         // Set bounds automatically based on content.
         if auto_bounds || !bounds.is_valid() {
             bounds = min_auto_bounds;
-            hlines.iter().for_each(|line| bounds.extend_with_y(line.y));
-            vlines.iter().for_each(|line| bounds.extend_with_x(line.x));
             items
                 .iter()
-                .for_each(|item| bounds.merge(&item.series().get_bounds()));
+                .for_each(|item| bounds.merge(&item.get_bounds()));
             bounds.add_relative_margin(margin_fraction);
         }
         // Make sure they are not empty.
@@ -465,28 +468,32 @@ impl Widget for Plot {
         }
 
         // Initialize values from functions.
-        items.iter_mut().for_each(|item| {
-            item.series_mut()
-                .generate_points(transform.bounds().range_x())
-        });
+        items
+            .iter_mut()
+            .for_each(|item| item.initialize(transform.bounds().range_x()));
 
         let bounds = *transform.bounds();
 
         let prepared = Prepared {
             items,
-            hlines,
-            vlines,
             show_x,
             show_y,
             transform,
         };
         prepared.ui(ui, &response);
 
+        if let Some(mut legend) = legend {
+            ui.add(&mut legend);
+            hidden_items = legend.get_hidden_items();
+            hovered_entry = legend.get_hovered_entry_name();
+        }
+
         ui.memory().id_data.insert(
             plot_id,
             PlotMemory {
                 bounds,
                 auto_bounds,
+                hovered_entry,
                 hidden_items,
             },
         );
@@ -501,8 +508,6 @@ impl Widget for Plot {
 
 struct Prepared {
     items: Vec<Box<dyn PlotItem>>,
-    hlines: Vec<HLine>,
-    vlines: Vec<VLine>,
     show_x: bool,
     show_y: bool,
     transform: ScreenTransform,
@@ -518,26 +523,10 @@ impl Prepared {
 
         let transform = &self.transform;
 
-        for &hline in &self.hlines {
-            let HLine { y, stroke } = hline;
-            let points = [
-                transform.position_from_value(&Value::new(transform.bounds().min[0], y)),
-                transform.position_from_value(&Value::new(transform.bounds().max[0], y)),
-            ];
-            shapes.push(Shape::line_segment(points, stroke));
-        }
-
-        for &vline in &self.vlines {
-            let VLine { x, stroke } = vline;
-            let points = [
-                transform.position_from_value(&Value::new(x, transform.bounds().min[1])),
-                transform.position_from_value(&Value::new(x, transform.bounds().max[1])),
-            ];
-            shapes.push(Shape::line_segment(points, stroke));
-        }
-
+        let mut plot_ui = ui.child_ui(*transform.frame(), Layout::default());
+        plot_ui.set_clip_rect(*transform.frame());
         for item in &self.items {
-            item.get_shapes(transform, &mut shapes);
+            item.get_shapes(&mut plot_ui, transform, &mut shapes);
         }
 
         if let Some(pointer) = response.hover_pos() {
@@ -654,13 +643,15 @@ impl Prepared {
         let mut closest_item = None;
         let mut closest_dist_sq = interact_radius.powi(2);
         for item in items {
-            for value in &item.series().values {
-                let pos = transform.position_from_value(value);
-                let dist_sq = pointer.distance_sq(pos);
-                if dist_sq < closest_dist_sq {
-                    closest_dist_sq = dist_sq;
-                    closest_value = Some(value);
-                    closest_item = Some(item.name());
+            if let Some(values) = item.values() {
+                for value in &values.values {
+                    let pos = transform.position_from_value(value);
+                    let dist_sq = pointer.distance_sq(pos);
+                    if dist_sq < closest_dist_sq {
+                        closest_dist_sq = dist_sq;
+                        closest_value = Some(value);
+                        closest_item = Some(item.name());
+                    }
                 }
             }
         }
