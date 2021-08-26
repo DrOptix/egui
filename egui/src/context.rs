@@ -688,7 +688,9 @@ impl Context {
     /// you may be interested in what it is doing (e.g. controlling your game).
     /// Returns `false` if a drag started outside of egui and then moved over an egui area.
     pub fn wants_pointer_input(&self) -> bool {
-        self.is_using_pointer() || (self.is_pointer_over_area() && !self.input().pointer.any_down())
+        self.is_using_pointer()
+            || (self.is_pointer_over_area()
+                && (!self.input().pointer.any_down() || self.input().scroll_delta != 0))
     }
 
     /// Is egui currently using the pointer position (e.g. dragging a slider).
