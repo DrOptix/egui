@@ -5,6 +5,18 @@ All notable changes to the `egui_web` integration will be noted in this file.
 
 ## Unreleased
 
+### Fixed 🐛
+* Fix alpha blending for WebGL2 backend, now having identical results as egui_glium
+
+
+## 0.14.0 - 2021-08-24
+
+### Added ⭐
+* Added support for dragging and dropping files into the browser window.
+
+### Fixed 🐛
+* Made text thicker and less pixelated.
+
 
 ## 0.13.0 - 2021-06-24
 

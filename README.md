@@ -37,13 +37,13 @@ If you have questions, use [Discussions](https://github.com/emilk/egui/discussio
 
 ## Demo
 
-[Click to run egui web demo](https://emilk.github.io/egui/index.html) (works in any browser with WASM and WebGL support).
+[Click to run egui web demo](https://emilk.github.io/egui/index.html) (works in any browser with WASM and WebGL support). Uses [`egui_web`](https://github.com/emilk/egui/tree/master/egui_web).
 
 To test the demo app locally, run `cargo run --release -p egui_demo_app`.
 
-The native backend is currently using [`glium`](https://github.com/glium/glium) ([though there are plans to change that](https://github.com/emilk/egui/issues/93)) and should work out-of-the-box on Mac and Windows, but on Linux you need to first run:
+The native backend is [`egui_glium`](https://github.com/emilk/egui/tree/master/egui_glium) (using [`glium`](https://github.com/glium/glium)) and should work out-of-the-box on Mac and Windows, but on Linux you need to first run:
 
-`sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libspeechd-dev libxkbcommon-dev`
+`sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libspeechd-dev libxkbcommon-dev libssl-dev`
 
 On Fedora Rawhide you need to run `dnf install clang clang-devel clang-tools-extra speech-dispatcher-devel`
 
@@ -79,7 +79,7 @@ ui.label(format!("Hello '{}', age {}", name, age));
 * Extensible: [easy to write your own widgets for egui](https://github.com/emilk/egui/blob/master/egui_demo_lib/src/apps/demo/toggle_switch.rs)
 * Modular: You should be able to use small parts of egui and combine them in new ways
 * Safe: there is no `unsafe` code in egui
-* Minimal dependencies: [`ahash`](https://crates.io/crates/ahash) [`atomic_refcell`](https://crates.io/crates/atomic_refcell) [`ordered-float`](https://crates.io/crates/ordered-float) [`ab_glyph`](https://crates.io/crates/ab_glyph).
+* Minimal dependencies: [`ab_glyph`](https://crates.io/crates/ab_glyph) [`ahash`](https://crates.io/crates/ahash) [`atomic_refcell`](https://crates.io/crates/atomic_refcell) [`ordered-float`](https://crates.io/crates/ordered-float).
 
 egui is *not* a framework. egui is a library you call into, not an environment you program for.
 
@@ -101,11 +101,11 @@ But if you are writing something interactive in Rust that needs a simple GUI, eg
 
 ### egui vs Dear ImGui
 
-The obvious alternative to egui is [`imgui-rs`](https://github.com/Gekkio/imgui-rs), the Rust wrapper around the C++ library [Dear ImGui](https://github.com/ocornut/imgui). Dear ImGui is a great library, which a lot more features and polish compared to egui. However, egui provides some benefits for Rust users:
+The obvious alternative to egui is [`imgui-rs`](https://github.com/Gekkio/imgui-rs), the Rust wrapper around the C++ library [Dear ImGui](https://github.com/ocornut/imgui). Dear ImGui is a great library (and the main inspiration for egui), with a lot more features and polish. However, egui provides some benefits for Rust users:
 
 * egui is pure Rust
 * egui is easily compiled to WASM
-* egui lets you use native Rust String types (`imgui-rs` forces you to use annoying macros and wrappers for zero-terminated strings)
+* egui lets you use native Rust string types (`imgui-rs` forces you to use annoying macros and wrappers for zero-terminated strings)
 * [Writing your own widgets in egui is simple](https://github.com/emilk/egui/blob/master/egui_demo_lib/src/apps/demo/toggle_switch.rs)
 
 egui also tries to improve your experience in other small ways:
@@ -162,13 +162,14 @@ The integration needs to do two things:
 
 I maintain two official egui integrations made for apps:
 
-* [`egui_web`](https://crates.io/crates/egui_web) for making a web app. Compiles to WASM, renders with WebGL. [Click to run the egui demo](https://emilk.github.io/egui/index.html).
-* [`egui_glium`](https://crates.io/crates/egui_glium) for compiling native apps with [Glium](https://github.com/glium/glium).
+* [`egui_web`](https://github.com/emilk/egui/tree/master/egui_web) for making a web app. Compiles to WASM, renders with WebGL. [Click to run the egui demo](https://emilk.github.io/egui/index.html).
+* [`egui_glium`](https://github.com/emilk/egui/tree/master/egui_glium) for compiling native apps with [Glium](https://github.com/glium/glium).
 
 If you making an app, consider using [`eframe`](https://github.com/emilk/egui/tree/master/eframe), a framework which allows you to write code that works on both the web (`egui_web`) and native (using `egui_glium`).
 
 ### 3rd party
 
+* [`amethyst_egui`](https://github.com/jgraef/amethyst_egui) for [the Amethyst game engine](https://amethyst.rs/).
 * [`bevy_egui`](https://github.com/mvlabat/bevy_egui) for [the Bevy game engine](https://bevyengine.org/).
 * [`egui_glfw_gl`](https://github.com/cohaereo/egui_glfw_gl) for [GLFW](https://crates.io/crates/glfw).
 * [`egui-miniquad`](https://github.com/not-fl3/egui-miniquad) for [Miniquad](https://github.com/not-fl3/miniquad).
@@ -233,6 +234,8 @@ For a reference OpenGL backend, see [the `egui_glium` painter](https://github.co
 ## Why immediate mode
 
 `egui` is an [immediate mode GUI library](https://en.wikipedia.org/wiki/Immediate_mode_GUI), as opposed to a *retained mode* GUI library. The difference between retained mode and immediate mode is best illustrated with the example of a button: In a retained GUI you create a button, add it to some UI and install some on-click handler (callback). The button is retained in the UI, and to change the text on it you need to store some sort of reference to it. By contrast, in immediate mode you show the button and interact with it immediately, and you do so every frame (e.g. 60 times per second). This means there is no need for any on-click handler, nor to store any reference to it. In `egui` this looks like this: `if ui.button("Save file").clicked() { save(file); }`.
+
+A more detailed description of immediate mode can be found [in the `egui` docs](https://docs.rs/egui/latest/egui/#understanding-immediate-mode).
 
 There are advantages and disadvantages to both systems.
 
@@ -309,7 +312,7 @@ The _frame_ in `eframe` stands both for the frame in which your egui app resides
 On Linux and Mac, Firefox will copy the WebGL render target from GPU, to CPU and then back again: https://bugzilla.mozilla.org/show_bug.cgi?id=1010527#c0
 
 ### Why does my web app not fill the full width of the screen?
-To alleviate the above mentioned performance issues the default max-width of an egui web app is 1024 points. You can change this by ovveriding the `fn max_size_points` of [`epi::App`](https://docs.rs/epi/latest/epi/trait.App.html).
+To alleviate the above mentioned performance issues the default max-width of an egui web app is 1024 points. You can change this by overriding the `fn max_size_points` of [`epi::App`](https://docs.rs/epi/latest/epi/trait.App.html).
 
 
 ## Other

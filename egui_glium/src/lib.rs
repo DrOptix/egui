@@ -255,6 +255,22 @@ pub fn input_to_egui(
                 },
             });
         }
+        WindowEvent::HoveredFile(path) => {
+            input_state.raw.hovered_files.push(egui::HoveredFile {
+                path: Some(path.clone()),
+                ..Default::default()
+            });
+        }
+        WindowEvent::HoveredFileCancelled => {
+            input_state.raw.hovered_files.clear();
+        }
+        WindowEvent::DroppedFile(path) => {
+            input_state.raw.hovered_files.clear();
+            input_state.raw.dropped_files.push(egui::DroppedFile {
+                path: Some(path.clone()),
+                ..Default::default()
+            });
+        }
         _ => {
             // dbg!(event);
         }
@@ -504,7 +520,7 @@ impl EguiGlium {
     pub fn on_event(&mut self, event: &glium::glutin::event::WindowEvent<'_>) {
         crate::input_to_egui(
             self.egui_ctx.pixels_per_point(),
-            &event,
+            event,
             self.clipboard.as_mut(),
             &mut self.input_state,
         );

@@ -390,7 +390,7 @@ impl<'t, S: TextBuffer> Widget for TextEdit<'t, S> {
         ui.allocate_rect(frame_rect, Sense::hover());
         let frame_response = ui.interact(frame_rect, id, Sense::click());
         let response = response | frame_response;
-        if response.clicked() {
+        if response.clicked() && !response.lost_focus() {
             ui.memory().request_focus(response.id);
         }
 
@@ -458,7 +458,8 @@ impl<'t, S: TextBuffer> TextEdit<'t, S> {
             .or(ui.style().override_text_style)
             .unwrap_or_else(|| ui.style().body_text_style);
         let line_spacing = ui.fonts().row_height(text_style);
-        let available_width = ui.available_width();
+        const MIN_WIDTH: f32 = 24.0; // Never make a `TextEdit` more narrow than this.
+        let available_width = ui.available_width().at_least(MIN_WIDTH);
         let desired_width = desired_width.unwrap_or_else(|| ui.spacing().text_edit_width);
 
         let make_galley = |ui: &Ui, text: &str| {
